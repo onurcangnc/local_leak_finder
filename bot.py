@@ -241,7 +241,13 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for line in data_list:
             f.write(line + "\n")
 
-    await update.message.reply_document(document=open(output_file, "rb"))
+    try:
+        await update.message.reply_document(document=open(output_file, "rb"))
+    finally:
+        try:
+            os.remove(output_file)
+        except Exception as e:
+            logging.error(f"Dosya silme hatası: {e}")
 
 # --------------------------------------------------------------
 # Main Application
