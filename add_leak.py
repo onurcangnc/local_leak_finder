@@ -1,13 +1,15 @@
+import os
+from dotenv import load_dotenv
 import psycopg2
 
 def import_single_column(file_path):
     try:
         conn = psycopg2.connect(
-            dbname="postgres",
-            user="botuser",
-            password="admin",
-            host="localhost",
-            port="5432"
+            dbname=os.getenv("PGDATABASE"),
+            user=os.getenv("PGUSER"),
+            password=os.getenv("PGPASSWORD"),
+            host=os.getenv("PGHOST"),
+            port=os.getenv("PGPORT")
         )
         cursor = conn.cursor()
 

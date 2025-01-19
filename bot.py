@@ -1,26 +1,27 @@
+import os
 import logging
 import psycopg2
+from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    Application
-)
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
+# .env dosyasını yükle
+load_dotenv()
+
+# Logging yapılandırması
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-# Veritabanı Bilgileri
-DB_NAME = "postgres"
-DB_USER = "botuser"
-DB_PASSWORD = "admin"
-DB_HOST = "localhost"
-DB_PORT = "5432"
-
-ADMIN_CHAT_ID = 649226694  # Kendi chat_id'niz
+# Environment variables'dan bilgileri al
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID"))
+TOKEN = os.getenv("TOKEN")
 
 # --------------------------------------------------------------
 # Veritabanı Fonksiyonları
@@ -132,7 +133,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Merhaba, ben sızıntı verileri arama aracıyım...\n"
         "Komutlar için /help yazabilirsiniz."
     )
-    # ASYNC fonksiyonda reply_text bir coroutine -> await
     await update.message.reply_text(text)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -192,11 +192,7 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Ana Uygulama (senkron run_polling, async komutlar)
 # --------------------------------------------------------------
 def main():
-    from telegram.ext import ApplicationBuilder
-
-    TOKEN = ""
-
-    # ApplicationBuilder ile bir Application oluşturuyoruz.
+    # Telegram bot uygulamasını başlatıyoruz
     app = ApplicationBuilder().token(TOKEN).build()
 
     # Komutları kaydet
@@ -206,7 +202,6 @@ def main():
     app.add_handler(CommandHandler("search", search_command))
 
     print("Bot çalışıyor...")
-    # Bu metot bloklayıcıdır (SENKRON). Kendi içinde event loop yönetir.
     app.run_polling()
 
 if __name__ == "__main__":
