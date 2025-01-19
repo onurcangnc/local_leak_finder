@@ -194,7 +194,7 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     from telegram.ext import ApplicationBuilder
 
-    TOKEN = "7352847455:AAErst_8a-FFbvAli5kyM1K1jJXdRkkOmnM"
+    TOKEN = ""
 
     # ApplicationBuilder ile bir Application oluşturuyoruz.
     app = ApplicationBuilder().token(TOKEN).build()
