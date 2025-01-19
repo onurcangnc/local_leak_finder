@@ -173,27 +173,46 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
 
 async def authorize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        admin_chat_ids = get_admin_chat_id()
-    except Exception as e:
-        await update.message.reply_text("Could not determine admins. Check logs for details.")
-        return
-
-    requester_id = update.effective_user.id
-    if requester_id not in admin_chat_ids:
-        await update.message.reply_text("You do not have permission to use this command.")
-        return
-
+    """Authorize a user by setting is_authorized = TRUE."""
     if len(context.args) < 1:
         await update.message.reply_text("Please provide a chat_id. Example: /authorize 123456789")
         return
 
     try:
+        # Extract the target chat_id from the command arguments
         target_chat_id = int(context.args[0])
-        authorize_user_in_db(target_chat_id)
-        await update.message.reply_text(f"User {target_chat_id} has been authorized.")
+
+        # Check if the target chat_id exists in the database
+        conn = psycopg2.connect(
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            host=DB_HOST,
+            port=DB_PORT
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT chat_id FROM bot_users WHERE chat_id = %s", (target_chat_id,))
+        row = cur.fetchone()
+
+        if row:
+            # If the chat_id exists, authorize the user
+            cur.execute("UPDATE bot_users SET is_authorized = TRUE WHERE chat_id = %s", (target_chat_id,))
+            conn.commit()
+            await update.message.reply_text(f"User {target_chat_id} has been authorized as an admin.")
+        else:
+            # If the chat_id does not exist, notify the requester
+            await update.message.reply_text(f"Chat ID {target_chat_id} not found in the database.")
+
     except ValueError:
         await update.message.reply_text("Please provide a valid numeric chat_id.")
+    except Exception as e:
+        logging.error(f"authorize_command error: {e}")
+        await update.message.reply_text("An error occurred. Please try again later.")
+    finally:
+        if 'cur' in locals():
+            cur.close()
+        if 'conn' in locals():
+            conn.close()
 
 async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_user.id
