@@ -35,11 +35,11 @@ import psycopg2
 
 # PostgreSQL bağlantısı
 conn = psycopg2.connect(
-    dbname="railway",
-    user="postgres",
-    password="GIwrtWvJmhTxqjokahbkaXmFAypVsYtu",
-    host="viaduct.proxy.rlwy.net",
-    port="39942"
+    dbname="",
+    user="",
+    password="",
+    host="",
+    port=""
 )
 cursor = conn.cursor()
 
