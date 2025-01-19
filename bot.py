@@ -41,7 +41,7 @@ def ensure_user_in_db(chat_id: int):
         cur.execute("SELECT chat_id FROM bot_users WHERE chat_id = %s", (chat_id,))
         row = cur.fetchone()
         if not row:
-            cur.execute("INSERT INTO bot_users (chat_id, is_authorized) VALUES (%s, FALSE)", (chat_id,))
+            cur.execute("INSERT INTO bot_users (chat_id, is_authorized, is_admin) VALUES (%s, FALSE, FALSE)", (chat_id,))
             conn.commit()
     except Exception as e:
         logging.error(f"ensure_user_in_db error: {e}")
@@ -76,8 +76,9 @@ def is_user_authorized(chat_id: int) -> bool:
             conn.close()
     return authorized
 
-def authorize_user_in_db(chat_id: int):
-    """Authorize the user by setting is_authorized=True."""
+def is_user_admin(chat_id: int) -> bool:
+    """Check if the user is an admin."""
+    is_admin = False
     try:
         conn = psycopg2.connect(
             dbname=DB_NAME,
@@ -87,41 +88,18 @@ def authorize_user_in_db(chat_id: int):
             port=DB_PORT
         )
         cur = conn.cursor()
-        cur.execute("UPDATE bot_users SET is_authorized = TRUE WHERE chat_id = %s", (chat_id,))
-        conn.commit()
+        cur.execute("SELECT is_admin FROM bot_users WHERE chat_id = %s", (chat_id,))
+        row = cur.fetchone()
+        if row:
+            is_admin = row[0]
     except Exception as e:
-        logging.error(f"authorize_user_in_db error: {e}")
+        logging.error(f"is_user_admin error: {e}")
     finally:
         if 'cur' in locals():
             cur.close()
         if 'conn' in locals():
             conn.close()
-
-def get_admin_chat_id() -> list[int]:
-    """Fetch a list of admin chat IDs from the bot_users table."""
-    try:
-        conn = psycopg2.connect(
-            dbname=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            host=DB_HOST,
-            port=DB_PORT
-        )
-        cur = conn.cursor()
-        cur.execute("SELECT chat_id FROM bot_users WHERE is_authorized = TRUE")
-        rows = cur.fetchall()
-        admin_chat_ids = [row[0] for row in rows]
-        if not admin_chat_ids:
-            raise ValueError("No admin users found in the bot_users table.")
-        return admin_chat_ids
-    except Exception as e:
-        logging.error(f"get_admin_chat_id error: {e}")
-        raise
-    finally:
-        if 'cur' in locals():
-            cur.close()
-        if 'conn' in locals():
-            conn.close()
+    return is_admin
 
 def search_in_leaks(keyword: str):
     """Search for the keyword in the leaks table."""
@@ -167,22 +145,27 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Commands:\n"
         "/start - Start the bot\n"
         "/help - Display help\n"
-        "/authorize <chat_id> - Authorize a user\n"
+        "/authorize <chat_id> - Authorize a user (admin-only)\n"
         "/search <keyword> - Search leaks\n"
     )
     await update.message.reply_text(text)
 
 async def authorize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Authorize a user by setting is_authorized = TRUE."""
+    """Authorize a user (only admins can perform this action)."""
+    requester_chat_id = update.effective_user.id
+
+    # Admin kontrolü
+    if not is_user_admin(requester_chat_id):
+        await update.message.reply_text("You do not have permission to use this command.")
+        return
+
     if len(context.args) < 1:
         await update.message.reply_text("Please provide a chat_id. Example: /authorize 123456789")
         return
 
     try:
-        # Extract the target chat_id from the command arguments
         target_chat_id = int(context.args[0])
 
-        # Check if the target chat_id exists in the database
         conn = psycopg2.connect(
             dbname=DB_NAME,
             user=DB_USER,
@@ -191,16 +174,16 @@ async def authorize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             port=DB_PORT
         )
         cur = conn.cursor()
+
         cur.execute("SELECT chat_id FROM bot_users WHERE chat_id = %s", (target_chat_id,))
         row = cur.fetchone()
 
         if row:
-            # If the chat_id exists, authorize the user
+            # Admin yetkilendirme yapabilir
             cur.execute("UPDATE bot_users SET is_authorized = TRUE WHERE chat_id = %s", (target_chat_id,))
             conn.commit()
-            await update.message.reply_text(f"User {target_chat_id} has been authorized as an admin.")
+            await update.message.reply_text(f"User {target_chat_id} has been authorized.")
         else:
-            # If the chat_id does not exist, notify the requester
             await update.message.reply_text(f"Chat ID {target_chat_id} not found in the database.")
 
     except ValueError:
@@ -215,8 +198,11 @@ async def authorize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             conn.close()
 
 async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Allow authorized users and admins to perform searches."""
     chat_id = update.effective_user.id
-    if not is_user_authorized(chat_id):
+
+    # Kullanıcının yetkili veya admin olup olmadığını kontrol et
+    if not is_user_authorized(chat_id) and not is_user_admin(chat_id):
         await update.message.reply_text("You are not authorized to search.")
         return
 
@@ -233,7 +219,6 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No results found.")
         return
 
-    # Create a file named after the search keyword
     output_file = f"{keyword.replace(' ', '_')}.txt"
     with open(output_file, "w", encoding="utf-8") as f:
         for line in data_list:
